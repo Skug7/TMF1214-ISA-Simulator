@@ -41,6 +41,14 @@ function execute(instr, args) {
             cpu.registers[dest] = cpu.registers[s1] + cpu.registers[s2];
             break;
 
+        case "MUL":
+    // Syntax: MUL Dest Source1 Source2 (e.g., MUL R3 R1 R2)
+        let destMul = parseInt(args[0].replace('R', ''));
+        let s1Mul = parseInt(args[1].replace('R', ''));
+        let s2Mul = parseInt(args[2].replace('R', ''));
+        cpu.registers[destMul] = cpu.registers[s1Mul] * cpu.registers[s2Mul];
+    break;
+
         default:
             console.log("Unknown Instruction: " + instr);
     }
