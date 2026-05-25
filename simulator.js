@@ -9,7 +9,17 @@ function runProgram() {
     cpu.pc = 0;
     cpu.registers = [0, 0, 0, 0]; // Reset hardware
 
+    let cycles = 0;
+    const maxCycles = 1000; // cycke limit
+
     while (cpu.pc < code.length) {
+        // Infinite Loop Protection
+        cycles++;
+        if (cycles > maxCycles) {
+            document.getElementById('console').innerHTML += `<span style="color: red;">Execution stopped: Possible infinite loop detected (exceeded ${maxCycles} cycles).</span><br>`;
+            break; 
+        }
+
         let rawLine = code[cpu.pc].trim();
         if (rawLine === "") { cpu.pc++; continue; }
 
@@ -18,9 +28,11 @@ function runProgram() {
         let instruction = parts[0]; // e.g., "ADD"
 
         // EXECUTE
-        execute(instruction, parts.slice(1));
+        let jumped = execute(instruction, parts.slice(1));
 
-        cpu.pc++; // Increment Program Counter
+        if (!jumped) {
+            cpu.pc++;
+        }
     }
     updateUI();
 }
@@ -42,17 +54,22 @@ function execute(instr, args) {
             break;
 
         case "MUL":
-    // Syntax: MUL Dest Source1 Source2 (e.g., MUL R3 R1 R2)
-        let destMul = parseInt(args[0].replace('R', ''));
-        let s1Mul = parseInt(args[1].replace('R', ''));
-        let s2Mul = parseInt(args[2].replace('R', ''));
-        cpu.registers[destMul] = cpu.registers[s1Mul] * cpu.registers[s2Mul];
-    break;
+            // Syntax: MUL Dest Source1 Source2 (e.g., MUL R3 R1 R2)
+            let destMul = parseInt(args[0].replace('R', ''));
+            let s1Mul = parseInt(args[1].replace('R', ''));
+            let s2Mul = parseInt(args[2].replace('R', ''));
+            cpu.registers[destMul] = cpu.registers[s1Mul] * cpu.registers[s2Mul];
+            break;
+
+        case "JUMP":
+            let targetLine = parseInt(args[0]);
+            cpu.pc = targetLine; 
+            return true; 
 
         default:
             console.log("Unknown Instruction: " + instr);
     }
-}
+    return false;
 
 function updateUI() {
     document.getElementById('registers').innerText = `Registers: [${cpu.registers.join(', ')}]`;
