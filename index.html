@@ -1,35 +1,419 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <title>Web-ISA Simulator Starter</title>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>TMF1214 – Web ISA Simulator</title>
+    <link href="https://fonts.googleapis.com/css2?family=Share+Tech+Mono&family=Orbitron:wght@700;900&display=swap" rel="stylesheet">
     <style>
-        body { font-family: monospace; background: #1e1e1e; color: #00ff00; padding: 20px; }
-        .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; }
-        .box { border: 1px solid #00ff00; padding: 10px; }
-        textarea { width: 100%; height: 100px; background: #000; color: #fff; }
-        button { background: #00ff00; color: #000; padding: 10px; cursor: pointer; }
+        /* ── DESIGN TOKENS ── */
+        :root {
+            --bg:       #0a0e0f;
+            --panel:    #0f1618;
+            --border:   #1e3a3a;
+            --accent:   #00e5cc;
+            --accent2:  #ff6b35;
+            --green:    #39ff14;
+            --dim:      #4a7070;
+            --text:     #cce8e8;
+            --error:    #ff4455;
+            --warn:     #ffcc00;
+            --result:   #a8ff78;
+            --font-mono: 'Share Tech Mono', monospace;
+            --font-title: 'Orbitron', sans-serif;
+        }
+
+        *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+        body {
+            background: var(--bg);
+            color: var(--text);
+            font-family: var(--font-mono);
+            min-height: 100vh;
+            padding: 0;
+            overflow-x: hidden;
+        }
+
+        /* Scanline overlay */
+        body::before {
+            content: '';
+            position: fixed; inset: 0;
+            background: repeating-linear-gradient(
+                0deg,
+                transparent,
+                transparent 2px,
+                rgba(0,0,0,0.08) 2px,
+                rgba(0,0,0,0.08) 4px
+            );
+            pointer-events: none;
+            z-index: 100;
+        }
+
+        /* ── HEADER ── */
+        header {
+            display: flex;
+            align-items: center;
+            gap: 16px;
+            padding: 18px 28px 14px;
+            border-bottom: 1px solid var(--border);
+            background: linear-gradient(90deg, #0f1618 0%, #0a1414 100%);
+        }
+
+        .cpu-icon {
+            width: 40px; height: 40px;
+            border: 2px solid var(--accent);
+            border-radius: 6px;
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 3px; padding: 6px;
+            flex-shrink: 0;
+        }
+        .cpu-icon span {
+            background: var(--accent);
+            border-radius: 1px;
+            animation: blink 1.6s infinite;
+        }
+        .cpu-icon span:nth-child(2) { animation-delay: .4s; }
+        .cpu-icon span:nth-child(3) { animation-delay: .8s; }
+        .cpu-icon span:nth-child(4) { animation-delay: 1.2s; }
+
+        @keyframes blink {
+            0%, 100% { opacity: 1; }
+            50%       { opacity: 0.2; }
+        }
+
+        h1 {
+            font-family: var(--font-title);
+            font-size: 1.15rem;
+            font-weight: 900;
+            color: var(--accent);
+            letter-spacing: 2px;
+            text-shadow: 0 0 14px rgba(0,229,204,.45);
+            line-height: 1.2;
+        }
+        h1 small {
+            display: block;
+            font-size: 0.6rem;
+            font-weight: 700;
+            color: var(--dim);
+            letter-spacing: 3px;
+            margin-top: 2px;
+        }
+
+        .badge {
+            margin-left: auto;
+            font-size: 0.65rem;
+            padding: 4px 10px;
+            border: 1px solid var(--accent2);
+            color: var(--accent2);
+            border-radius: 3px;
+            letter-spacing: 1px;
+        }
+
+        /* ── ISA LEGEND ── */
+        .isa-bar {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 6px;
+            padding: 10px 28px;
+            background: #0c1415;
+            border-bottom: 1px solid var(--border);
+            font-size: 0.72rem;
+            color: var(--dim);
+        }
+        .isa-bar strong { color: var(--accent); margin-right: 3px; }
+        .op-tag {
+            border: 1px solid var(--border);
+            padding: 2px 8px;
+            border-radius: 3px;
+            background: #121d1d;
+        }
+        .op-tag strong { color: var(--green); }
+
+        /* ── MAIN LAYOUT ── */
+        main {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 0;
+            height: calc(100vh - 105px);
+        }
+
+        /* ── PANELS ── */
+        .panel {
+            display: flex;
+            flex-direction: column;
+            border-right: 1px solid var(--border);
+            overflow: hidden;
+        }
+        .panel:last-child { border-right: none; }
+
+        .panel-header {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            padding: 10px 16px;
+            background: #0c1516;
+            border-bottom: 1px solid var(--border);
+            font-size: 0.72rem;
+            letter-spacing: 2px;
+            color: var(--dim);
+            text-transform: uppercase;
+            flex-shrink: 0;
+        }
+        .panel-header .dot {
+            width: 8px; height: 8px;
+            border-radius: 50%;
+            background: var(--accent);
+            box-shadow: 0 0 6px var(--accent);
+        }
+        .panel-header .dot.orange { background: var(--accent2); box-shadow: 0 0 6px var(--accent2); }
+
+        /* ── CODE EDITOR ── */
+        #code {
+            flex: 1;
+            width: 100%;
+            resize: none;
+            background: transparent;
+            color: #e0f0ee;
+            font-family: var(--font-mono);
+            font-size: 0.88rem;
+            line-height: 1.7;
+            padding: 14px 18px;
+            border: none;
+            outline: none;
+            caret-color: var(--accent);
+            tab-size: 4;
+        }
+        #code::selection { background: rgba(0,229,204,0.2); }
+
+        /* ── BUTTON ROW ── */
+        .btn-row {
+            display: flex;
+            gap: 8px;
+            padding: 10px 16px;
+            background: #0c1516;
+            border-top: 1px solid var(--border);
+            flex-shrink: 0;
+        }
+
+        .btn {
+            font-family: var(--font-mono);
+            font-size: 0.78rem;
+            letter-spacing: 1px;
+            padding: 8px 18px;
+            border: 1px solid;
+            border-radius: 3px;
+            cursor: pointer;
+            transition: all .15s;
+            background: transparent;
+            text-transform: uppercase;
+        }
+        .btn-run {
+            border-color: var(--green);
+            color: var(--green);
+        }
+        .btn-run:hover {
+            background: var(--green);
+            color: #000;
+            box-shadow: 0 0 12px rgba(57,255,20,.4);
+        }
+        .btn-challenge {
+            border-color: var(--accent);
+            color: var(--accent);
+        }
+        .btn-challenge:hover {
+            background: var(--accent);
+            color: #000;
+            box-shadow: 0 0 12px rgba(0,229,204,.4);
+        }
+        .btn-stop {
+            border-color: #ff6b35;
+            color: #ff6b35;
+        }
+        .btn-stop:hover {
+            background: #ff6b35;
+            color: #000;
+        }
+        .btn-clear {
+            border-color: var(--dim);
+            color: var(--dim);
+            margin-left: auto;
+        }
+        .btn-clear:hover {
+            border-color: var(--error);
+            color: var(--error);
+        }
+
+        /* ── RIGHT PANEL (registers + console) ── */
+        .right-panel {
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+        }
+
+        /* ── REGISTER FILE ── */
+        .reg-section {
+            padding: 14px 16px;
+            border-bottom: 1px solid var(--border);
+            flex-shrink: 0;
+            background: #0b1415;
+        }
+
+        .reg-grid {
+            display: grid;
+            grid-template-columns: repeat(4, 1fr);
+            gap: 8px;
+            margin-top: 10px;
+        }
+
+        .reg {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            background: #111e1e;
+            border: 1px solid var(--border);
+            border-radius: 4px;
+            padding: 6px 4px;
+            transition: border-color .2s, box-shadow .2s;
+        }
+        .reg.changed {
+            border-color: var(--accent);
+            box-shadow: 0 0 8px rgba(0,229,204,.3);
+        }
+
+        .reg-name {
+            font-size: 0.6rem;
+            color: var(--dim);
+            letter-spacing: 1px;
+            text-transform: uppercase;
+        }
+        .reg-val {
+            font-size: 0.92rem;
+            color: var(--accent);
+            font-weight: bold;
+            margin-top: 3px;
+        }
+
+        #pc {
+            margin-top: 8px;
+            font-size: 0.75rem;
+            color: var(--dim);
+        }
+        #pc span { color: var(--accent2); font-size: 0.85rem; }
+
+        /* ── CONSOLE ── */
+        .console-header {
+            padding: 8px 16px;
+            font-size: 0.68rem;
+            letter-spacing: 2px;
+            color: var(--dim);
+            text-transform: uppercase;
+            background: #0c1516;
+            border-bottom: 1px solid var(--border);
+            display: flex;
+            gap: 8px;
+            align-items: center;
+            flex-shrink: 0;
+        }
+
+        #console {
+            flex: 1;
+            overflow-y: auto;
+            padding: 10px 16px;
+            font-size: 0.78rem;
+            line-height: 1.6;
+            background: #09100f;
+        }
+
+        #console::-webkit-scrollbar { width: 4px; }
+        #console::-webkit-scrollbar-track { background: transparent; }
+        #console::-webkit-scrollbar-thumb { background: var(--border); border-radius: 2px; }
+
+        .log-line { padding: 1px 0; }
+        .log-normal { color: var(--text); }
+        .log-info   { color: var(--accent); }
+        .log-trace  { color: #3a6060; font-size: 0.72rem; }
+        .log-result { color: var(--result); font-weight: bold; }
+        .log-error  { color: var(--error); font-weight: bold; }
+        .log-warn   { color: var(--warn); }
+
+        /* ── RESPONSIVE ── */
+        @media (max-width: 700px) {
+            main { grid-template-columns: 1fr; height: auto; }
+            .panel { min-height: 300px; }
+            #code { height: 220px; }
+            #console { min-height: 200px; }
+        }
     </style>
 </head>
 <body>
-    <h1>8-Bit Web CPU Simulator</h1>
-    <div class="grid">
-        <div class="box">
-            <h3>Assembly Code</h3>
-            <textarea id="code">LOAD R1 10
-LOAD R2 20
-ADD R3 R1 R2</textarea>
-            <br><br>
-            <button onclick="runProgram()">Execute Program</button>
+
+<header>
+    <div class="cpu-icon">
+        <span></span><span></span><span></span><span></span>
+    </div>
+    <h1>WEB-ISA SIMULATOR
+        <small>TMF1214 COMPUTER ARCHITECTURE — EXTENDED CPU</small>
+    </h1>
+    <div class="badge">8-REG · FLOAT · TRAPS</div>
+</header>
+
+<div class="isa-bar">
+    <span>INSTRUCTION SET:</span>
+    <span class="op-tag"><strong>LOAD</strong> Rd val</span>
+    <span class="op-tag"><strong>ADD</strong> Rd Rs1 Rs2</span>
+    <span class="op-tag"><strong>SUB</strong> Rd Rs1 Rs2</span>
+    <span class="op-tag"><strong>MUL</strong> Rd Rs1 Rs2</span>
+    <span class="op-tag"><strong>DIV</strong> Rd Rs1 Rs2</span>
+    <span class="op-tag"><strong>JUMP</strong> line#</span>
+    <span class="op-tag"><strong>BEQ</strong> Rs1 Rs2 line#</span>
+    <span class="op-tag"><strong>HALT</strong></span>
+    <span style="margin-left:auto; color: #2a5050;">; comments supported · R0–R7 · floats supported</span>
+</div>
+
+<main>
+    <!-- LEFT: Code Editor -->
+    <div class="panel">
+        <div class="panel-header">
+            <div class="dot"></div>
+            ASSEMBLY EDITOR
         </div>
-        <div class="box">
-            <h3>CPU State</h3>
-            <div id="registers">Registers: [0, 0, 0, 0]</div>
-            <div id="pc">PC: 0</div>
-            <hr>
-            <h3>Output Console</h3>
-            <div id="console"></div>
+        <textarea id="code" spellcheck="false">; Basic test — R3 should equal 30
+LOAD R1 10
+LOAD R2 20
+ADD R3 R1 R2
+HALT</textarea>
+        <div class="btn-row">
+            <button class="btn btn-run" onclick="runProgram()">▶ Execute</button>
+            <button class="btn btn-challenge" onclick="loadChallenge()">⚡ Load Challenge</button>
+            <button class="btn btn-stop" onclick="stopExecution()">■ Stop</button>
+            <button class="btn btn-clear" onclick="clearAll()">✕ Clear</button>
         </div>
     </div>
-    <script src="simulator.js"></script>
+
+    <!-- RIGHT: CPU State + Console -->
+    <div class="panel right-panel">
+        <div class="panel-header">
+            <div class="dot orange"></div>
+            CPU STATE
+        </div>
+
+        <div class="reg-section">
+            <div style="font-size:.68rem; color:var(--dim); letter-spacing:2px; text-transform:uppercase; margin-bottom:2px;">Register File (R0 – R7)</div>
+            <div class="reg-grid" id="registers">
+                <!-- filled by JS -->
+            </div>
+            <div id="pc">Program Counter: <span>0</span></div>
+        </div>
+
+        <div class="console-header">
+            <div class="dot"></div>
+            OUTPUT CONSOLE
+        </div>
+        <div id="console"></div>
+    </div>
+</main>
+
+<script src="simulator.js"></script>
 </body>
 </html>
