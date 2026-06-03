@@ -261,7 +261,7 @@
 
         .reg-grid {
             display: grid;
-            grid-template-columns: repeat(4, 1fr);
+            grid-template-columns: repeat(8, 1fr);
             gap: 8px;
             margin-top: 10px;
         }
@@ -355,7 +355,7 @@
     <h1>WEB-ISA SIMULATOR
         <small>TMF1214 COMPUTER ARCHITECTURE — EXTENDED CPU</small>
     </h1>
-    <div class="badge">8-REG · FLOAT · TRAPS</div>
+    <div class="badge">16-REG · FLOAT · TRAPS</div>
 </header>
 
 <div class="isa-bar">
@@ -368,7 +368,7 @@
     <span class="op-tag"><strong>JUMP</strong> line#</span>
     <span class="op-tag"><strong>BEQ</strong> Rs1 Rs2 line#</span>
     <span class="op-tag"><strong>HALT</strong></span>
-    <span style="margin-left:auto; color: #2a5050;">; comments supported · R0–R7 · floats supported</span>
+    <span style="margin-left:auto; color: #2a5050;">; comments supported · R0–R15 · floats supported</span>
 </div>
 
 <main>
@@ -399,7 +399,7 @@ HALT</textarea>
         </div>
 
         <div class="reg-section">
-            <div style="font-size:.68rem; color:var(--dim); letter-spacing:2px; text-transform:uppercase; margin-bottom:2px;">Register File (R0 – R7)</div>
+            <div style="font-size:.68rem; color:var(--dim); letter-spacing:2px; text-transform:uppercase; margin-bottom:2px;">Register File (R0 – R15)</div>
             <div class="reg-grid" id="registers">
                 <!-- filled by JS -->
             </div>
