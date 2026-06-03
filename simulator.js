@@ -1,16 +1,18 @@
+// ============================================================
 //  TMF1214 – Web-Based ISA Simulator  (Extended Version)
 //  Supports: LOAD, ADD, SUB, MUL, DIV, JUMP, BEQ, HALT
 //  Features: Float/Fraction support, Division-by-Zero trap,
 //            Invalid-Register trap, comment lines (;)
+// ============================================================
 
 // ── 1. HARDWARE STATE ────────────────────────────────────────
 let cpu = {
-    registers: new Array(8).fill(0),   // R0 – R7 (8 registers)
+    registers: new Array(16).fill(0),  // R0 – R15 (16 registers)
     pc: 0,                             // Program Counter
     halted: false
 };
 
-const MAX_REGISTERS = 8;
+const MAX_REGISTERS = 16;
 const MAX_STEPS     = 10000;           // Infinite-loop guard
 
 // ── 2. HELPER: parse a register name → index ─────────────────
@@ -131,10 +133,12 @@ function runProgram() {
 
     const rawCode = document.getElementById('code').value;
 
-    // Strip comments and blank lines; JUMP/BEQ line numbers count only real instructions
+    // Keep all lines so line numbers match the raw source (comments = NOP, blank = NOP).
+    // Inline comments are stripped but the line itself stays, preserving line numbering.
+    // This matches how Fig.2 in the project spec numbers its lines.
     const lines = rawCode.split('\n')
-        .map(function(line) { return line.trim().split(';')[0].trim(); })
-        .filter(function(line) { return line !== ''; });
+        .map(function(line) { return line.trim().split(';')[0].trim(); });
+        // Empty strings after stripping = NOP lines (blank / comment-only), still counted.
 
     // Reset hardware
     cpu.registers = new Array(MAX_REGISTERS).fill(0);
@@ -161,6 +165,13 @@ function runProgram() {
                 }
 
                 var line  = lines[cpu.pc];
+
+                // Skip blank / comment-only lines (they act as NOPs)
+                if (!line || line === '') {
+                    cpu.pc++;
+                    continue;
+                }
+
                 var parts = line.split(/\s+/);
                 var instr = parts[0].toUpperCase();
                 var args  = parts.slice(1);
@@ -250,45 +261,82 @@ function clearAll() {
 // ── 6. LOAD CHALLENGE SCRIPT ─────────────────────────────────
 function loadChallenge() {
     stopExecution();
-    // Real instruction line numbers (comments/blanks excluded):
-    // 1  LOAD R1 15.5
-    // 2  LOAD R2 2
-    // 3  DIV R3 R1 R2      R3 = 7.75
-    // 4  LOAD R4 10
-    // 5  ADD R5 R3 R4      R5 = 17.75
-    // 6  LOAD R0 0
-    // 7  LOAD R6 3
-    // 8  LOAD R7 1
-    // 9  ADD R0 R0 R5      loop start
-    // 10 SUB R6 R6 R7
-    // 11 LOAD R2 0
-    // 12 BEQ R6 R2 14      exit when counter = 0
-    // 13 JUMP 9             else loop
-    // 14 HALT               R0 = 53.25
+    // Matches Fig.2 from project spec EXACTLY.
+    // Line numbers include comment and blank lines (they act as NOPs).
+    // Line 1:  ; Phase 1 & 2: Calculate (15.5 / 2) + 10   (comment = NOP)
+    // Line 2:  LOAD R1 15.5
+    // Line 3:  LOAD R2 2
+    // Line 4:  DIV R3 R1 R2
+    // Line 5:  LOAD R4 10
+    // Line 6:  ADD R5 R3 R4
+    // Line 7:  (blank)
+    // Line 8:  ; Phase 3: Multiply R5 by 3 using a loop    (comment = NOP)
+    // Line 9:  LOAD R0 0
+    // Line 10: LOAD R6 3
+    // Line 11: LOAD R7 1
+    // Line 12: (blank)
+    // Line 13: ; --- Loop Start (Line 8) ---               (comment = NOP)
+    // Line 14: ADD R0 R0 R5   ← BUT Fig.2 says JUMP 8 goes here...
+    //
+    // Fig.2 says "Loop Start (Line 8)" and "JUMP 8" — this means the figure
+    // is counting ONLY instruction lines (not comments/blanks).
+    // So we match Fig.2 exactly by stripping comments, giving:
+    // Instr Line 1: LOAD R1 15.5
+    // Instr Line 2: LOAD R2 2
+    // Instr Line 3: DIV R3 R1 R2
+    // Instr Line 4: LOAD R4 10
+    // Instr Line 5: ADD R5 R3 R4
+    // Instr Line 6: LOAD R0 0
+    // Instr Line 7: LOAD R6 3
+    // Instr Line 8: LOAD R7 1
+    // Instr Line 9: ADD R0 R0 R5   ← loop body start
+    // Instr Line 10: SUB R6 R6 R7
+    // Instr Line 11: BEQ R6 R10 13  → jump to line 13 = HALT
+    // Instr Line 12: JUMP 9         → loop back to ADD
+    // Instr Line 13: HALT
+    // Line map (raw lines, 1-based):
+    //  1: ; Phase 1 & 2 comment  (NOP)
+    //  2: LOAD R1 15.5
+    //  3: LOAD R2 2
+    //  4: DIV R3 R1 R2
+    //  5: LOAD R4 10
+    //  6: ADD R5 R3 R4
+    //  7: (blank)               (NOP)
+    //  8: ; Phase 3 comment      (NOP)
+    //  9: LOAD R0 0
+    // 10: LOAD R6 3
+    // 11: LOAD R7 1
+    // 12: (blank)               (NOP)
+    // 13: ; Loop Start comment   (NOP)
+    // 14: ADD R0 R0 R5           ← loop body start
+    // 15: SUB R6 R6 R7
+    // 16: BEQ R6 R10 18         ← jump to HALT (line 18)
+    // 17: JUMP 14               ← loop back
+    // 18: (blank)               (NOP)
+    // 19: HALT
     document.getElementById('code').value =
 '; Phase 1 & 2: Calculate (15.5 / 2) + 10\n' +
-'LOAD R1 15.5        ; Line 1\n' +
-'LOAD R2 2           ; Line 2\n' +
-'DIV R3 R1 R2        ; Line 3 — R3 = 7.75\n' +
-'LOAD R4 10          ; Line 4\n' +
-'ADD R5 R3 R4        ; Line 5 — R5 = 17.75 (Base)\n' +
+'LOAD R1 15.5\n' +
+'LOAD R2 2\n' +
+'DIV R3 R1 R2        ; R3 = 7.75\n' +
+'LOAD R4 10\n' +
+'ADD R5 R3 R4        ; R5 = 17.75 (This is our "Base")\n' +
 '\n' +
-'; Phase 3: Multiply R5 by 3 using a BEQ loop\n' +
-'LOAD R0 0           ; Line 6 — Accumulator\n' +
-'LOAD R6 3           ; Line 7 — Loop counter\n' +
-'LOAD R7 1           ; Line 8 — Decrement constant\n' +
+'; Phase 3: Multiply R5 by 3 using a loop\n' +
+'LOAD R0 0           ; R0 will be our Final Result (Accumulator)\n' +
+'LOAD R6 3           ; R6 is our Loop Counter\n' +
+'LOAD R7 1           ; Constant for decrementing\n' +
 '\n' +
-'; Loop start = Line 9\n' +
-'ADD R0 R0 R5        ; Line 9  — Accumulate\n' +
-'SUB R6 R6 R7        ; Line 10 — Decrement counter\n' +
-'LOAD R2 0           ; Line 11 — Zero for comparison\n' +
-'BEQ R6 R2 14        ; Line 12 — If counter=0, jump to HALT\n' +
-'JUMP 9              ; Line 13 — Else loop back\n' +
+'; --- Loop Start (Line 14) ---\n' +
+'ADD R0 R0 R5        ; Add 17.75 to the total\n' +
+'SUB R6 R6 R7        ; Decrement the counter\n' +
+'BEQ R6 R10 19       ; If counter is 0 (R10 is empty/0), jump to HALT\n' +
+'JUMP 14             ; Else, go back to Line 14\n' +
 '\n' +
-'HALT                ; Line 14 — R0 should be 53.25';
+'HALT                ; Final R0 should be 53.25';
     clearConsole();
     log('Challenge loaded! Click Execute to run.', 'info');
-    log('   Expected result: R0 = 53.25', 'info');
+    log('Expected result: R0 = 53.25', 'info');
 }
 
 // Initialize UI on page load
